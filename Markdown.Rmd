@@ -1,0 +1,116 @@
+---
+title: "PeerAssessment2 - Costs of Weather Events"
+output: html_document
+---
+#Synopsis
+In this report I aim to investigate the socio-economic effects of weather event in the United States between the years 1950 and 2011. I examined which types of events were most costly in terms of economic costs as well as human injuries and fatalities. I found that during this period, tornadoes were, by far, the most costly in terms of population health. Economically, floods, hurricanes/typhoods and storm surges were the most costly. 
+
+#Data Processing
+From the National Weather Service I obtained data about storms that occured between 1950 and 2011. The zipped file was read directly using the read.csv function. I examined if the data included missing values for either fatalities or injuries; it did not.
+```{r}
+cache = TRUE
+library(dplyr)
+NOAA <- read.csv("repdata_data_StormData.csv.bz2", header = T, 
+                 nrows = 902297)
+mean(is.na(NOAA$FATALITIES))
+mean(is.na(NOAA$INJURIES))
+```
+
+#Results
+##Effects on population health
+To analyse the effects of various types of weather events on population health, I gathered the data for injuries and fatalities and grouped them by event type. I arbitrarily chose the top 20 event types for each category.
+```{r}
+##Make datatable for each category, rank them and extract the top 20
+##of each
+Inj <- NOAA %>%
+        group_by(EVTYPE) %>%
+        summarise(Injuries = sum(INJURIES)) %>%
+        arrange(desc(Injuries))
+InjTop20 <- Inj[1:20,] 
+
+Fat <- NOAA %>%
+        group_by(EVTYPE) %>% 
+        summarise(Fatalities = sum(FATALITIES)) %>%
+        arrange(desc(Fatalities))
+FatTop20 <- Fat[1:20,]
+```
+
+To answer the question, I plotted the top 20 weather events causing injuries or fatalities and also listed them below each plot with the numbers. In both cases, tornado was the top event and was dramatically higher than all other events. To make the plots meaningful, I scalled the x axis to not include the values for tornadoes. 
+```{r}
+library(ggplot2)
+gi <- ggplot(InjTop20, aes(x = Injuries, y = reorder(EVTYPE, Injuries)))
+pi <- gi + geom_point(size = 3) +
+        coord_cartesian(xlim = c(0, 7500)) +
+        labs(title = "Top 20 Weather Events Causing Injuries") +
+        labs(y = "Event Type")
+print(pi)
+
+InjTop20
+
+gf <- ggplot(FatTop20, aes(x = Fatalities, y = reorder(EVTYPE, Fatalities)))
+pf <- gf + geom_point(size = 3) +
+        coord_cartesian(xlim = c(0, 2000)) +
+        labs(title = "Top 20 Weather Events Causing Fatalities") +
+        labs(y = "Event Type")
+print(pf)
+FatTop20
+```
+These data show that tornadoes are the most harmful weather events with respect to population health. 
+
+##Analysing the event types that have the greatest economic consequences
+To determine which types of events have the greatest economic consequence, I examined property damages and crop damages. 
+```{r}
+##Extract columns for event type and property and crop damages
+damage <- NOAA[,c(8,25:28)]
+```
+
+Because the values of the damages can be reported in thousands, millions or billions of dollars, I selected only those events that were reported in the billions.
+```{r}
+##Select events in which property or crop damage costs are reported
+##in the billions of dollars
+propDamBill <- damage[damage$PROPDMGEXP == "B",1:3]
+cropDamBill <- damage[damage$CROPDMGEXP == "B",c(1, 4:5)]
+##Merge the two lists together
+totDamBill <- merge(propDamBill, cropDamBill, all = T)
+```
+
+To calculate the total cost for each event, I added the columns for property damange and crop damage together into a variable called cost. NA values were replaced with 0 before this operation was performed.
+```{r}
+propNA <- is.na(totDamBill$PROPDMG)
+for(i in 1:length(propNA)) {
+        if(propNA[i] == TRUE) {
+                totDamBill$PROPDMG[i] = 0
+        }
+}
+cropNA <- is.na(totDamBill$CROPDMG)
+for(i in 1:length(cropNA)) {
+        if(cropNA[i] == TRUE) {
+                totDamBill$CROPDMG[i] = 0
+        }
+}
+##Add together costs for each category for each event 
+totDamBill$cost <- totDamBill$PROPDMG + totDamBill$CROPDMG
+```
+
+I then grouped the data by event type and added the costs for each.
+```{r}
+##Group the event types and sum the costs for each event
+econCost <- totDamBill %>%
+        group_by(EVTYPE) %>%
+        summarise(cost = sum(cost)) %>%
+        arrange(desc(cost))
+```
+
+The following plot and table show the data.
+```{r}
+ge <- ggplot(econCost, aes(x = cost, y = reorder(EVTYPE, cost)))
+pe <- ge + geom_point(size = 3) +
+        labs(title = "Most expensive types of weather events") +
+        labs(x = "Cost (billions of dollars)") +
+        labs(y = "Event Type")
+print(pe)
+
+as.data.frame(econCost)
+```
+
+#
